@@ -28,15 +28,15 @@
 	<body>
 		<div class="container">
 		<h1>CS184/284A Fall 2026 Homework 4 Write-Up</h1>
-		<div style="text-align: center;">Names: </div>
+		<div style="text-align: center;">Names: Yufu Chen</div>
 
 		<br>
 
-		Link to webpage: (TODO) <a href="https://cs184.eecs.berkeley.edu/fa26">cs184.eecs.berkeley.edu/fa26</a>
+		Link to webpage: <a href="https://cal-cs184-student.github.io/hw4-jerrychen0718-writeup/">HW4 Write-Up</a>
 
 		<br>
 
-		Link to GitHub repository: (TODO) <a href="https://cs184.eecs.berkeley.edu/fa26">cs184.eecs.berkeley.edu/fa26</a>
+		Link to GitHub repository: <a href="https://github.com/cal-cs184-student/hw4-jerrychen0718-writeup">HW4 Code Repository</a>
 
 		<figure>
 			<img src="assets/clothsim.png" alt="Cloth draped over sphere" style="width:70%"/>
@@ -48,62 +48,783 @@
 		-->
 
 		<h2>Overview</h2>
-		Give a high-level overview of what you implemented in this homework. Think about what you've built as a whole. Share your thoughts on what interesting things you've learned from completing the homework.
+
+		<p>
+			In this homework, I implemented a cloth simulation system using a mass-spring model. I represented the cloth as a grid of point masses connected by structural, shearing, and bending springs. I then used Verlet integration to simulate cloth movement under gravity, and implemented collision detection for spheres, planes, and the cloth itself.
+		</p>
+
+		<p>
+			I also implemented several GLSL shaders, including Diffuse, Blinn-Phong, Texture Mapping, Bump Mapping, Displacement Mapping, and Environment Mapping. The most interesting part of this homework was understanding how physics simulation and rendering work together. I learned how spring forces and position constraints affect the stability of cloth simulation, and how different shading techniques can change the appearance of the the same geometry.
+		</p>
 
 		<h2>Part 1: Masses and springs</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		
+		<h3> Implementation </h3>
 
-		<p>Here is an example 2x2 gridlike structure using an HTML table. Each <b>tr</b> is a row and each <b>td</b> is a column in that row. You might find this useful for framing and showing your result images in an organized fashion.</p>
+		<p>
+			I implemented the cloth as a grid of point masses connected by three types of springs. Each point mass stores its current position, previous position, and whether it is pinned. For horizontal cloth, the points are placed in the XZ plane. For vertical cloth, they placed in the XY plane with small random offsets along the Z-axis.
+		</p>
+
+		<p>
+			I created three types of springs:
+		</p>
+
+		<ul>
+			<li>
+				<b>Structural springs:</b> Connect horizontally and vertically
+				adjacent point masses to resist stretching.
+			</li>
+			<li>
+				<b>Shearing springs:</b> Connect diagonally adjacent point masses
+				to resist diagonal deformation.
+			</li>
+			<li>
+				<b>Bending springs:</b> Connect point masses two grid steps apart
+				to resist excessive bending.
+			</li>
+		</ul>
+
+		<h3> Wireframe Comparison </h3>
+
+		<p>
+			The following screenshot show the cloth in the pinned2.json scene with different spring constraints enabled.
+		</p>
+
+		<h4>1. Without Shearing Constraints</h4>
+
+		<figure>
+			<img src="assets/part1_no_shearing.png"
+				alt="Cloth without shearing springs"
+				style="width:85%;"/>
+			<figcaption>
+				Structural and bending springs enabled, shearing springs disabled.
+			</figcaption>
+		</figure>
+
+		<p>
+			Without shearing springs, the wireframe contains horizontal, vertical, and longer bending connections, but no diagonal connections. The grid structure remains visible.
+		</p>
+
+		<h4>2. Only Shearing Constraints</h4>
+
+		<figure>
+			<img src="assets/part1_only_shearing.png"
+				alt="Cloth with only shearing springs"
+				style="width:85%;"/>
+			<figcaption>
+				Only shearing springs enabled.
+			</figcaption>
+		</figure>
+
+		<p>
+			With only shearing spring enabled, the wireframe is dominated by diagonal connections. These springs resist diagonal deformation but do not directly provide the same horizontal and vertical resistance as structural springs.
+		</p>
+
+		<h4>3. All Constraints Enabled</h4>
+
+		<figure>
+			<img src="assets/part1_all_constraints.png"
+				alt="Cloth with all spring constraints enabled"
+				style="width:85%;"/>
+			<figcaption>
+				Structural, shearing, and bending springs all enabled.
+			</figcaption>
+		</figure>
+
+		<p>
+			When all three spring types are enabled, the wireframe forms a denser network of connections. Structural springs resist stretching, shearing springs resist diagonal deformation, and bending springs resist excessive bending. Together, these springs create a more realistic cloth model.
+		</p>
+
+		<h2>Part 2: Simulation via numerical integration</h2>
+		
+		<h3> Implementation </h3>
+
+		<p>
+			I implemented the cloth simulation using Verlet integration. First, I calculated the total force acting on each point mass, including external forces such as gravity and spring forces based on Hooke's Law. I used a reduced spring constant of 0.2 * ks for bending springs to make them less stiff.
+		</p>
+
+		<p>
+			Next, I used Verlet integration to update the positions of unpinned point masses. The method estimates velocity from the difference between the current and previous positions and includes damping to gradually reduce motion. Finally, I applied position constraints to prevent each spring from stretching more than 10% beyond its rest length during the constraint correction.
+		</p>
+
+		<h3> 1. Spring Stiffness (ks) </h3>
+
+		<p>
+			I compared two spring constants, ks = 500 and ks = 50000, while keeping the other simulation parameters fixed. A lower ks produces weaker restoring forces, allowing the cloth to deform more easily. A higher ks produces stronger restoring forces, making the cloth resist stretching and maintain its structure more strongly.
+		</p>
+
+		<div style="display: flex; gap: 20px; justify-content: center;">
+			<figure style="width: 48%; margin: 0;">
+				<img src="assets/part2_ks_500.png"
+					alt="Cloth with ks 500"
+					style="width:100%;"/>
+				<figcaption>
+				Low stiffness: ks = 500
+				</figcaption>
+			</figure>
+
+			<figure style="width: 48%; margin: 0;">
+				<img src="assets/part2_ks_50000.png"
+					alt="Cloth with ks 50000"
+					style="width:100%;"/>
+				<figcaption>
+				High stiffness: ks = 50000
+				</figcaption>
+			</figure>
+		</div>
+
+		<p>
+			During the falling and oscillation stages, the low-stiffness cloth can undergo larger deformations and stretching. In contrast, the high-stiffness cloth responds more strongly to deformation and tends to retain its shape. The difference is especially noticeable during motion, while the 10% spring stretch constraints can limit the differences in the final resting shapes.
+		</p>
+
+		<h3> 2. Density Comparison </h3>
+
+		<p>
+			I compared different cloth densities while keeping the spring stiffness and damping constant. Density determines the mass of each point mass and therefore affects the gravitational force acting on the cloth.
+		</p>
+
+		<div style="display: flex; gap: 15px; justify-content: center;">
+			<figure style="width: 32%; margin: 0;">
+				<img src="assets/part2_density_low.png"
+					alt="Low density cloth"
+					style="width:100%;"/>
+				<figcaption>Low Density</figcaption>
+			</figure>
+
+			<figure style="width: 32%; margin: 0;">
+				<img src="assets/part2_density_default.png"
+					alt="Default density cloth"
+					style="width:100%;"/>
+				<figcaption>Default Density</figcaption>
+			</figure>
+
+			<figure style="width: 32%; margin: 0;">
+				<img src="assets/part2_density_high.png"
+					alt="High density cloth"
+					style="width:100%;"/>
+				<figcaption>High Density</figcaption>
+			</figure>
+		</div>
+
+		<p>
+			With lower density, the cloth has less mass, so the spring forces are relatively stronger compared with its weight. This makes the cloth more resistant to gravity-induced stretching.
+		</p>
+
+		<p>
+			With higher density, the cloth experiences a larger gravitational force while the spring stiffness remains unchanged. As a result, the cloth tends to stretch and deform more under its own weight. However, the 10% spring stretch constraint limits excessive deformation, which can reduce the differences between the final shapes.
+		</p>
+
+		<h3> 3. Damping Comparison </h3>
+
+		<p>
+			I compared three damping values: 0%, 0.2%, and 1%, while keeping the spring stiffness and density constant. Damping reduces the motion carried over between stimulation steps, which helps the cloth gradually lose its oscillation.
+		</p>
+
+		<div style="display: flex; gap: 15px; justify-content: center;">
+			<figure style="width: 32%; margin: 0;">
+				<img src="assets/part2_damping_0.png"
+					alt="Cloth with zero damping"
+					style="width:100%;"/>
+				<figcaption>
+				No Damping: 0%
+				</figcaption>
+			</figure>
+
+			<figure style="width: 32%; margin: 0;">
+				<img src="assets/part2_damping_default.png"
+					alt="Cloth with default damping"
+					style="width:100%;"/>
+				<figcaption>
+				Default Damping: 0.2%
+				</figcaption>
+			</figure>
+
+			<figure style="width: 32%; margin: 0;">
+				<img src="assets/part2_damping_1.png"
+					alt="Cloth with high damping"
+					style="width:100%;"/>
+				<figcaption>
+				High Damping: 1%
+				</figcaption>
+			</figure>
+		</div>
+
+		<p>
+			With 0% samping, the cloth retains more of its previous motion and tends to oscillation for a longer time after falling. At the default damping value of 0.2%, the cloth gradually loses motion and settles more smoothly. With 1% damping, the oscillations are reduced more strongly, so the cloth tends to settle faster.
+		</p>
+
+		<p>
+			The main difference between these settings is the behavior during motion rather than the final equilibrium shape. Higher damping reduces oscillation amplitude and helps the stimulation approach a resting state more quickly.
+		</p>
+
+		<h3> 4. Pinned Four Corners - Resting State </h3>
+
+		<p>
+			The following screenshot shows the final resting state of the cloth in the pinned4.json scene, rendered using a shaded surface.
+		</p>
+
+		<figure>
+			<img src="assets/part2_pinned4_rest.png"
+				alt="Final resting state of cloth with four pinned corners"
+				style="width:85%;"/>
+
+			<figcaption>
+				Final resting state of the cloth with all four corners pinned.
+			</figcaption>
+		</figure>
+
+		<p>
+			In this scene, all four corners of the cloth remain fixed while the remaining point masses move under gravity and spring forces. Unlike the two-corner pinned scene, the cloth cannot freely hang downward from one edge. Instead, the interior sags while the fixed corners support the cloth.
+		</p>
+
+		<p>
+			The final shape is determined by the balance between gravity, spring restoring forces, and the position constraints. The pinned points remain stationary throughout the simulation.
+		</p>
+
+		<h2>Part 3: Handling collisions with other objects</h2>
+		
+		<h3> Implementation </h3>
+
+		<p>
+			In part 3, I implemented collision handling between the cloth and external objects, including sphere and planes. After updating the positions of the point masses using Verlet integration, I checked each point mass against the collision objects in the scene and corrected its position when necessary.
+		</p>
+
+		<p>
+			For sphere collisions, I calculated the distance between each point mass and the center of the sphere. If the distance was smaller than the sphere's radius, I projected the point mass back toward the sphere's surface. I then applied the correction using the friction coefficient to reduce motion during contact.
+		</p>
+
+		<p>
+			For plane collisions, I used the signed distance between each point mass and the plane to detect penetration. The point mass was corrected toward the appropriate side of the plane with a small surface offset. Friction was also applied to reduce motion along the surface.
+		</p>
+
+		<h3> 1. Sphere Collision - Spring Stiffness Comparison </h3>
+
+		<p>
+			I tested the cloth stimulation using sphere.json with three different spring stiffness values: ks = 500, ks = 5000, and ks = 50000. The follwoing screenshots show the cloth after settling onto the sphere.
+		</p>
+
+		<div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center;">
+			<figure style="flex: 1; min-width: 180px; margin: 0;">
+				<img src="assets/part3_sphere_500.png"
+					alt="Cloth on sphere with ks 500"
+					style="width:100%;"/>
+				<figcaption>
+				Low stiffness: ks = 500
+				</figcaption>
+			</figure>
+
+			<figure style="flex: 1; min-width: 180px; margin: 0;">
+				<img src="assets/part3_sphere_5000.png"
+					alt="Cloth on sphere with ks 5000"
+					style="width:100%;"/>
+				<figcaption>
+				Default stiffness: ks = 5000
+				</figcaption>
+			</figure>
+
+			<figure style="flex: 1; min-width: 180px; margin: 0;">
+				<img src="assets/part3_sphere_50000.png"
+					alt="Cloth on sphere with ks 50000"
+					style="width:100%;"/>
+				<figcaption>
+				High stiffness: ks = 50000
+				</figcaption>
+			</figure>
+		</div>
+
+		<p>
+			Spring stiffness affects how strongly the cloth resists deformation as it settles onto the sphere. With ks = 500, the weaker spring forces generally allow the cloth to conform more easily to the sphere and form softer folds.
+		</p>
+
+		<p>
+			As ks = 5000, the cloth has a balance between flexibility and resistance to stretching. With ks = 500000, the stronger restoring forces make the cloth more resistant to deformation, which can change the size and distribution of folds around the sphere.
+		</p>
+
+		<p>
+			All three simulations use the same collision geometry.  The differences arise from the spring forces and the resulting cloth deformation, rather than changes to the sphere itself.
+		</p>
+
+		<h3> 2. Plane Collision - Resting State </h3>
+
+		<p>
+			The following screenshot shows the cloth in the plane.json scene after falling onto a horizontal plane and approaching its resting state.
+		</p>
+
+		<figure>
+			<img src="assets/part3_plane.png"
+				alt="Cloth resting on a horizontal plane"
+				style="width:85%;"/>
+
+			<figcaption>
+				Cloth resting on a horizontal plane after
+				collision detection and position correction.
+			</figcaption>
+		</figure>
+
+		<p>
+			As the cloth falls under gravity, the point masses come into contact with the plane. The collision detection system prevents the cloth from continuing to move through the surface by correcting the positions of penetrating point masses.
+		</p>
+
+		<p>
+			A small surface offset helps keep the point masses above the plane, while friction reduces motion along the surface. As the stimulation progresses, the cloth gradually settles onto the plane. This demonstrates how collision constraints interact with the mass-spring simulation to produce realistic cloth behavior.
+		</p>
+
+		<h2>Part 4: Handling self-collisions</h2>
+		
+		<h3> Implementation </h3>
+
+		<p>
+			I implemented cloth self-collision using spatial hashing. Without self-collision handling, point masses could pass through other parts of the cloth, causing unrealistic intersections when the cloth folds onto itself.
+		</p>
+
+		<p>
+			First, I implemented hash_position() to map each point mass's 3D position into a spatial hash key. Then, build_spatial_map() groups point masses into a hash table according to their positions.
+		</p>
+
+		<p>
+			In self_collide(), I look up nearby collision candidates from the spatial hash table. If two different point masses are closer than twice the cloth thickness, I calculate a position correction to separate them. The corrections are averaged and scaled by the number of simulation steps before updating th point mass.
+		</p>
+
+		<p>
+			Spatial hashing makes self-collision detection more efficient than checking every possible pair of point masses. This allows the cloth to fold onto itself instead of simply passing through its own surface.
+		</p>
+
+		<h3>1. Cloth Falling and Self-Collision Sequence</h3>
+
+		<p>
+			The following screenshots show the cloth falling in the selfCollision.json scene, from its initial self-collision to a more stable resting state.
+		</p>
+
+		<h4>Early Stage: Initial Self-Collision</h4>
+
+		<figure>
+			<img src="assets/part4_early.png"
+				alt="Early stage of cloth self-collision"
+				style="width:85%;"/>
+			<figcaption>
+				Early stage: The cloth begins folding and colliding with itself.
+			</figcaption>
+		</figure>
+
+		<h4> Middle Stage: Folding and Accumulation </h4>
+
+		<figure>
+			<img src="assets/part4_middle.png"
+				alt="Middle stage of cloth folding"
+				style="width:85%;"/>
+			<figcaption>
+				Middle stage: The cloth continues falling and forms overlapping folds.
+			</figcaption>
+		</figure>
+
+		<h4> Late Stage: Resting State </h4>
+
+		<figure>
+			<img src="assets/part4_rest.png"
+				alt="Late stage of cloth self-collision"
+				style="width:85%;"/>
+			<figcaption>
+				Late stage: The cloth accumulates on the plane and approaches a resting state.
+			</figcaption>
+		</figure>
+
+		<p>
+			During the early stage, the cloth starts to fold as gravity pulls it downward. As different parts of the cloth approach each other, the self-collision constraints prevent nearby point masses from occupying the same space.
+		</p>
+
+		<p>
+			During the middle stage, additional folds form as the cloth continues to collapse onto itself. In the late stage, the cloth accumulates on the ground and approaches a resting configuration. Some residual movement may retain because the collision corrections can continue to affect the cloth even after it reaches the plane.
+		</p>
+		
+		<h3> 2. Density Comparison </h3>
+
+		<p>
+			I compared two density values, 15 and 150, while keeping the spring stiffness at ks = 5000 and damping at 0.2%. Both stimulations used the selfCollision.json scene.
+		</p>
+
+		<div style="display: flex; gap: 20px; justify-content: center;">
+			<figure style="width: 48%; margin: 0;">
+				<img src="assets/part4_density_low.png"
+					alt="Self-collision with density 15"
+					style="width:100%;"/>
+				<figcaption>
+				Low Density: 15
+				</figcaption>
+			</figure>
+
+			<figure style="width: 48%; margin: 0;">
+				<img src="assets/part4_density_high.png"
+					alt="Self-collision with density 150"
+					style="width:100%;"/>
+				<figcaption>
+				High Density: 150
+				</figcaption>
+			</figure>
+		</div>
+
+		<p>
+			At lower density, the cloth has less mass, so the spring restoring forces are relatively stronger compared with gravity. This is helps the cloth resist deformation as it folds.
+		</p>
+
+		<p>
+			At higher density, the greater weight makes the cloth more susceptible to stretching and deformation under gravity. This can lead to different folding patterns and a more compressed configuration as the cloth accumulates on itself. The self-collision constraints help prevent nearby point masses from passing through each other in both cases.
+		</p>
+
+		<h3> 3. Spring Stiffness Comparison </h3>
+
+		<p>
+			I compared two spring stiffness values, ks = 500 and ks = 500000, while keeping density at 150 and damping at 0.2%. Both is simulations used the selfCollision.json scene.
+		</p>
+
+		<div style="display: flex; gap: 20px; justify-content: center;">
+			<figure style="width: 48%; margin: 0;">
+				<img src="assets/part4_ks_low.png"
+					alt="Self-collision with ks 500"
+					style="width:100%;"/>
+				<figcaption>
+				Low Stiffness: ks = 500
+				</figcaption>
+			</figure>
+
+			<figure style="width: 48%; margin: 0;">
+				<img src="assets/part4_ks_high.png"
+					alt="Self-collision with ks 50000"
+					style="width:100%;"/>
+				<figcaption>
+				High Stiffness: ks = 50000
+				</figcaption>
+			</figure>
+		</div>
+
+		<p>
+			With ks = 500, the weaker spring forces allow the cloth to stretch and deform more easily as it falls and collides with itself.
+		</p>
+
+		<p>
+			With ks = 50000, the stronger restoring forces resist stretching more strongly, changing how folds form and how the cloth accumulates on the ground. The cloth tends to preserve its local structure more effectively, although its final resting configuration also depends on collision constraints abd tge simulation history.
+		</p>
+
+		<p>
+			Comparing these two cases shows that spring stiffness affects the physical behavior and folding patterns of the cloth, while the self-collision algorithm prevents nearby point masses from overlapping in both simulations.
+		</p>
+
+		<h2>Part 5: Shaders</h2>
+		
+		<h3> Shader Program Overview </h3>
+
+		<p>
+			A shader program is a program that runs on the GPU to control how objects are rendered. In this homework, I implemented several GLSL shaders to create different lighting and material effects on the cloth and sphere.
+		</p>
+
+		<p>
+			A vertex shader processes individual vertices. It transforms vertex positions from model space into the appropriate coordinate spaces and passes attributes such as world-space positions, normals, and texture coordinates to the next stage of the rendering pipeline.
+		</p>
+
+		<p>
+			After rasterization, the GPU interpolates these attributes across the triangle's surface. The fragment shader then uses the interpolated information to calculate the final color of each fragment, based on lighting, textures, surface normals, or environment reflections.
+		</p>
+
+		<p>
+			By combining vertex and fragment shaders, we can create different visual effects without changing the underlying cloth simulation. For example, diffuse and Blinn-Phong shaders calculate lighting texture mapping adds surface colors, bump mapping changes the appearance of surface normals, and displacement mapping can modify the actual vertex positions.
+		</p>
+
+		<h3>1. Blinn-Phong Shading</h3>
+
+		<p>
+			I implemented the Blinn-Phong reflection model by combining ambient, diffuse, and specular lighting. The final surface color is the sum of these three components.
+		</p>
+
+		<p>
+			Ambient lighting provides a constant base level of illumination. Diffuse lighting follows Lambert's cosine law and depends on the dot product between the surface normal and the light direction. Specular lighting uses the halfway vector between the light direction and the viewing direction to calculate highlights.
+		</p>
+
+		<h4>Ambient Component Only</h4>
+
+		<figure>
+			<img src="assets/part5_phong_ambient.png"
+				alt="Ambient lighting only"
+				style="width:80%;"/>
+			<figcaption>
+				Ambient component only.
+			</figcaption>
+		</figure>
+
+		<p>
+			With only ambient lighting enabled, the cloth has relatively uniform brightness. The shape and folds are less noticeable because the lighting does not depend on the surface orientation.
+		</p>
+
+		<h4>Diffuse Component Only</h4>
+
+		<figure>
+			<img src="assets/part5_phong_diffuse.png"
+				alt="Diffuse lighting only"
+				style="width:80%;"/>
+			<figcaption>
+				Diffuse component only.
+			</figcaption>
+		</figure>
+
+		<p>
+			Diffuse lighting creates smooth brightness variations based on the angle between the surface normal and the incoming light direction. This makes the folds and curvature of the cloth easier to distinguish.
+		</p>
+
+		<h4>Specular Component Only</h4>
+
+		<figure>
+			<img src="assets/part5_phong_specular.png"
+				alt="Specular lighting only"
+				style="width:80%;"/>
+			<figcaption>
+				Specular component only.
+			</figcaption>
+		</figure>
+
+		<p>
+			Specular lighting produces highlights where the surface normal is close to the halfway vector. Areas that do not satisfy this condition remain relatively dark. The shininess exponent controls how concentrated the highlights appear.
+		</p>
+
+		<h4>Full Blinn-Phong Model</h4>
+
+		<figure>
+			<img src="assets/part5_phong_full.png"
+				alt="Complete Blinn-Phong shading"
+				style="width:80%;"/>
+			<figcaption>
+				Complete Blinn-Phong model combining ambient, diffuse, and specular components.
+			</figcaption>
+		</figure>
+
+		<p>
+			Combining all three lighting components produces a more complete appearance. Ambient lighting provides general visibility, diffuse lighting reveals the shape of the cloth, and specular lighting adds highlights that make the material appear more reflective.
+		</p> 
+
+		<h3>2. Texture Mapping</h3>
+
+		<p>
+			I implemented texture mapping by using UV coordinates to sample colors from a 2D image. The vertex shader passes the texture coordinates to the fragment shader, where the texture() function samples the corresponding color from the image.
+		</p>
+
+		<p>
+			For my custom texture, I replaced the original texture with a personal photograph and applied it to the cloth. This demonstrates how a 2D image can be mapped onto a deformable 3D surface without changing the underlying cloth geometry.
+		</p>
+
+		<h4>Custom Texture on Cloth</h4>
+
+		<figure>
+			<img src="assets/part5_custom_texture.png"
+				alt="Cloth rendered with a custom photo texture"
+				style="width:85%;"/>
+
+			<figcaption>
+				Custom photograph mapped onto the cloth surface using UV texture coordinates.
+			</figcaption>
+		</figure>
+
+		<p>
+			As the cloth bends and deforms, the texture follows the surface because its UV coordinates remain associated with the cloth vertices. Texture mapping changes the surface appearance without modifying he actual positions of the vertices.
+		</p>
+
+		<h3>3. Bump Mapping</h3>
+
+		<p>
+			I implemented bump mapping to create the appearance of surface detail without modifying the actual geometry. I used a brick-pattern height map to simulate an uneven surface on the cloth and sphere.
+		</p>
+
+		<p>
+			In the fragment shader, I sampled the height map at nearby UV coordinates to estimate the height changes along the U and V directions. These derivatives were used to calculate a perturbed normal in tangent space.
+		</p>
+
+		<p>
+			I then used the tangent-bitangent-normal (TBN) matrix to transform the perturbed normal into the coordinate space used for lighting calculations. Applying this new normal in the Blinn-Phong model creates the appearance of bumps and surface irregularities.
+		</p>
+
+		<h4>Bump Mapping on Cloth</h4>
+
+		<figure>
+			<img src="assets/part5_bump_cloth.png"
+				alt="Bump mapping applied to cloth"
+				style="width:85%;"/>
+
+			<figcaption>
+				Bump mapping applied to cloth using a brick-pattern height map.
+			</figcaption>
+		</figure>
+
+		<p>
+			The brick pattern produces variations in surface lighting, making the cloth appear to have raised and recessed details. However, the actual vertex positions remain unchanged, so the cloth still follows its original simulated geometry.
+		</p>
+
+		<h4>Bump Mapping on Sphere</h4>
+
+		<figure>
+			<img src="assets/part5_bump_sphere_uncovered.png"
+				alt="Bump mapping applied to sphere"
+				style="width:85%;"/>
+
+			<figcaption>
+				Bump mapping applied to the sphere using the same brick-pattern height map.
+			</figcaption>
+		</figure>
+
+		<p>
+			On the sphere, the brick texture creates the appearance of surface relief through changes in lighting. The silhouette of the sphere remains smooth because bump mapping changes the surface normals rather than the geometry.
+		</p>
+
+		<h3>4. Displacement Mapping</h3>
+
+		<p>
+			I implemented displacement mapping by modifying the actual vertex positions according to a height map. Unlike bump mapping, which only changes surface normals, displacement mapping changes the underlying geometry of the object.
+		</p>
+
+		<p>
+			In Displacement.vert, I sampled the height value from the texture using the vertex's UV coordinates. I then displaced each vertex along its original normal direction, scaled by the height value and the height scaling parameter.
+		</p>
+
+		<p>
+			I also used the normal perturbation calculationsfrom bump mapping in Displacement.frag to create lighting effects consistent with the surface details. I used the same custom brick-pattern height map for both shaders.
+		</p>
+
+		<h4>Displacement Mapping on Sphere</h4>
+
+		<figure>
+			<img src="assets/part5_displacement_sphere_uncovered.png"
+				alt="Displacement mapping applied to a sphere"
+				style="width:85%;"/>
+
+			<figcaption>
+				Displacement mapping on a sphere using the custom brick-pattern height map.
+			</figcaption>
+		</figure>
+
+		<p>
+			The height map modifies the sphere's vertex positions, creating actual geometric variation along the surface. Unlike bump mapping, the displaced geometry can affect the silhouette of the sphere.
+		</p>
+
+		<h3>5. Bump Mapping vs. Displacement Mapping</h3>
+
+		<p>
+			Both shaders use the same brick-pattern height map, but they produce surface detail in different ways. Bump mapping modifies only the normals used in lighting calculations, so the original geometry and silhouette remain unchanged.
+		</p>
+
+		<p>
+			Displacement mapping moves the actual mesh vertices, allowing the surface geometry and silhouette to change. However, its ability to represent fine details depends on the resolution of the mesh, since displacement is applied at vertices.
+		</p>
+
+		<p>
+			Bump mapping is generally more efficient for adding fine visual details without extra geometry, while displacement mapping is more appropriate when the surface shape itself needs to change.
+		</p>
+
+		<h3>6. Mesh Resolution Comparison</h3>
+
+		<p>
+			I compared bump mapping and displacement mapping on spheres with two different mesh resolutions: 16 x 16 and 128 x 128. Both shaders used the same custom brick-pattern height map.
+		</p>
+
 		<div style="display: flex; flex-direction: column; align-items: center;">
-			<table style="width: 100%; text-align: center; border-collapse: collapse;">
-			  <tr>
-				<td style="text-align: center;">
-				  <img src="assets/clothsim.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-				<td style="text-align: center;">
-				  <img src="assets/clothsim.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-			  </tr>
-			  <tr>
-				<td style="text-align: center;">
-				  <img src="assets/clothsim.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-				<td style="text-align: center;">
-				  <img src="assets/clothsim.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-			  </tr>
+			<table style="width:100%; text-align:center; border-collapse:collapse;">
+
+				<tr>
+					<th style="padding:12px;">Mesh Resolution</th>
+					<th style="padding:12px;">Bump Mapping</th>
+					<th style="padding:12px;">Displacement Mapping</th>
+				</tr>
+
+				<tr>
+					<td style="padding:10px;">16 x 16</td>
+
+					<td style="padding:10px;">
+						<img src="assets/part5_bump_16.png"
+							alt="Bump mapping at 16 x 16 resolution"
+							style="width:100%;"/>
+					</td>
+
+					<td style="padding:10px;">
+						<img src="assets/part5_displacement_16.png"
+							alt="Displacement mapping at 16 x 16 resolution"
+							style="width:100%;"/>
+					</td>
+				</tr>
+
+				<tr>
+					<td style="padding:10px;">128 x 128</td>
+
+					<td style="padding:10px;">
+						<img src="assets/part5_bump_128.png"
+							alt="Bump mapping at 128 x 128 resolution"
+							style="width:100%;"/>
+					</td>
+
+					<td style="padding:10px;">
+						<img src="assets/part5_displacement_128.png"
+							alt="Displacement mapping at 128 x 128 resolution"
+							style="width:100%;"/>
+					</td>
+				</tr>
 			</table>
 		</div>
 
-		<h2>Part 2: Simulation via numerical integration</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<p>
+			At 16 x 16 resolution, bump mapping can still display detailed surface lighting because the normals are modified per fragment. However, the sphere's underlying polygonal silhouette remains unchanged.
+		</p>
 
-		<h2>Part 3: Handling collisions with other objects</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<p>
+			At the same low resolution, displacement mapping is limited by the small number of vertices. Since only vertex positions are displaced, fine geometric details cannot be represented accurately by the coarse mesh.
+		</p>
 
-		<h2>Part 4: Handling self-collisions</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<p>
+			At 128 x 128 resolution, displacement mapping has many more vertices available to represent variations in the height map. This allows smoother and more detailed geometric changes. Bump mapping also benefits from a smoother underlying sphere, but its texture detail is primarily determined by the height map sampling and normal perturbation.
+		</p>
 
-		<h2>Part 5: Shaders</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<h3>7. Mirror Shader — Environment Mapping</h3>
 
-		<h2>(Optional) Part 6: Extra Credit - Additional cloth simulation features!</h2>
+		<p>
+			I implemented a mirror shader using environment mapping to simulate reflections on the cloth and sphere. Instead of calculating reflections through ray tracing, I used a precomputed environment cubemap to look up the reflected color.
+		</p>
+
+		<p>
+			In Mirror.frag, I first calculated the normalized direction from the surface point toward the camera. I then reflected the opposite direction across the surface normal using the GLSL reflect() function. Finally, I sampled the environment cubemap using the resulting reflection direction.
+		</p>
+
+		<h4>Mirror Shader on Cloth</h4>
+
+		<figure>
+			<img src="assets/part5_mirror_cloth.png"
+				alt="Environment-mapped reflections on cloth"
+				style="width:85%;"/>
+
+			<figcaption>
+				Mirror shader applied to the cloth using environment-mapped reflections.
+			</figcaption>
+		</figure>
+
+		<p>
+			The cloth reflects different parts of the surrounding environment depending on its local surface normals and the viewing direction. As the cloth folds, its normals change, causing the reflected environment to vary across the surface.
+		</p>
+
+		<h4>Mirror Shader on Sphere</h4>
+
+		<figure>
+			<img src="assets/part5_mirror_sphere_uncovered.png"
+				alt="Environment-mapped reflections on sphere"
+				style="width:85%;"/>
+
+			<figcaption>
+				Mirror shader applied to the sphere,
+				showing reflections from the environment cubemap.
+			</figcaption>
+		</figure>
+
+		<p>
+			On the sphere, the curved surface produces different reflection directions across its surface, creating the appearance of a reflective material. Unlike Blinn-Phong specular shading, the mirror shader samples the environment directly rather than only calculating highlights from individual lights.
+		</p>
+
+		<p>
+			Environment mapping provides an efficient approximation of mirror reflection for real-time rendering. However, because it does not trace actual reflection rays through the scene, it cannot correctly capture occlusion or reflections of nearby objects that are not represented in the environment map.
+		</p>
+
+		<h2>(Option al) Part 6: Extra Credit - Additional cloth simulation features!</h2>
 		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
 		
-		<h2>Additional Notes (please remove)</h2>
-		<ul>
-			<li>You can also add code if you'd like as so: <code>code code code</code></li>
-			<li>If you'd like to add math equations, 
-				<ul>
-					<li>You can write inline equations like so: \( a^2 + b^2 = c^2 \)</li>
-					<li>You can write display equations like so: \[ a^2 + b^2 = c^2 \]</li>
-				</ul>
-			</li>
-		</ul>
 		</div>
 	</body>
 </html>
